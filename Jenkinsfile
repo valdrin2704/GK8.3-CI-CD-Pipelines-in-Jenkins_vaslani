@@ -1,26 +1,74 @@
 pipeline {
-    agent any
-
+    agent {
+        docker {
+            image 'python:3.11'
+            args '-p 5556:5556'
+        }
+    }
+    environment {
+        APP_PORT = '5556'
+        GITHUB_REPO = 'https://github.com/valdrin2704/GK8.3-CI-CD-Pipelines-in-Jenkins_vaslani.git'
+    }
     stages {
-        stage('Source') {
+        stage('Pre-Build Cleanup') {
             steps {
-                echo 'Code erfolgreich aus GitHub geladen!'
+                // Kill any existing Flask processes
+                sh 'pkill -f "python hello.py" || true'
+            }
+        }
+        stage('Checkout') {
+            steps {
+                cleanWs()
+                git branch: 'main', url: "${GITHUB_REPO}"
             }
         }
         stage('Build') {
             steps {
-                echo 'Build-Schritt wird ausgefuehrt...'
+                sh '''
+                    python -m pip install --upgrade pip
+                    pip install flask
+                    pip install requests
+                    pip install pytest
+                    if [ ! -f count.txt ]; then
+                        echo "0" > count.txt
+                    fi
+                    chmod 666 count.txt
+                '''
             }
         }
         stage('Test') {
             steps {
-                echo 'Hello Valdrin'
+                sh '''
+                    # Run the unit tests
+                    python -m pytest tests/test_hello.py -v
+                '''
             }
         }
-        stage('Deployment') {
+        stage('Run') {
             steps {
-                echo 'Deployment erfolgreich abgeschlossen!'
+                sh '''
+                    nohup python src/hello.py > app.log 2>&1 &
+                    sleep 5
+                    curl http://localhost:5556/api/hello
+                '''
             }
+        }
+        stage('Test API') {
+            steps {
+                sh 'python tests/test_api.py'
+            }
+        }
+        stage('Keep Alive') {
+            steps {
+                // Keep the container running indefinitely
+                sh 'sleep infinity'
+            }
+        }
+    }
+    post {
+        always {
+            // Cleanup: Stop the Flask application
+            sh 'pkill -f "python src/hello.py" || true'
         }
     }
 }
