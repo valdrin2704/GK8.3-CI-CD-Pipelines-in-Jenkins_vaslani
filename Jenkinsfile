@@ -14,7 +14,7 @@ pipeline {
         }
         stage('Test') {
             steps {
-                echo 'HelloWorld'
+                echo 'Hello Valdrin'
             }
         }
         stage('Deployment') {
